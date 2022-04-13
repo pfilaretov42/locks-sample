@@ -33,34 +33,26 @@ public class StampedOptimisticLockTokenHolder implements TokenHolder {
     private Token updateTokenIf(Predicate<Token> shouldUpdateToken, Supplier<Token> supplier) {
         long stamp = lock.tryOptimisticRead();
         try {
-            for (; ; stamp = lock.writeLock()) {
-                if (stamp == 0L) {
-                    continue;
-                }
-
+            while (true) {
                 // possibly racy read
-                // TODO - clone token?
-                Token token = currentToken;
-                if (!lock.validate(stamp)) {
-                    continue;
+                // TODO - clone token instead of copying reference?
+                final Token token = currentToken;
+                if (lock.validate(stamp)) {
+                    if (shouldUpdateToken.test(token)) {
+                        // convert to write lock
+                        stamp = lock.tryConvertToWriteLock(stamp);
+                        if (stamp != 0L) {
+                            // exclusive access
+                            currentToken = supplier.get();
+                            return currentToken;
+                        }
+                    } else {
+                        return token;
+                    }
                 }
 
-                if (!shouldUpdateToken.test(token)) {
-                    return token;
-                }
-
-                // convert to write lock
-                stamp = lock.tryConvertToWriteLock(stamp);
-                if (stamp == 0L) {
-                    continue;
-                }
-
-                // exclusive access
-                if (shouldUpdateToken.test(currentToken)) {
-                    currentToken = supplier.get();
-                }
-
-                return currentToken;
+                // TODO - if we cannot get optimistic read, we go for write lock. But maybe we can try read lock first?
+                stamp = lock.writeLock();
             }
         } finally {
             if (StampedLock.isWriteLockStamp(stamp)) {
