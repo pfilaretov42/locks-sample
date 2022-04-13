@@ -15,7 +15,9 @@ public class Main {
 
         Supplier<Token> tokenSupplier = () ->
             new Token(UUID.randomUUID().toString(), Instant.now().plus(5, ChronoUnit.SECONDS));
-        TokenHolder tokenHolder = new SimpleTokenHolder(tokenSupplier, Clock.systemUTC());
+//        TokenHolder tokenHolder = new SimpleTokenHolder(tokenSupplier, Clock.systemUTC());
+//        TokenHolder tokenHolder = new ReadWriteLockTokenHolder(tokenSupplier, Clock.systemUTC());
+        TokenHolder tokenHolder = new StampedOptimisticLockTokenHolder(tokenSupplier, Clock.systemUTC());
 
         for (int i = 0; i <= 100; i++) {
             String token = tokenHolder.getToken();
