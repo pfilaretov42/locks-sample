@@ -33,20 +33,20 @@ public class StampedLockTokenHolder implements TokenHolder {
     private Token updateTokenIf(Predicate<Token> shouldUpdateToken, Supplier<Token> supplier) {
         long stamp = lock.readLock();
         try {
-            while (true) {
-                if (shouldUpdateToken.test(currentToken)) {
-                    stamp = lock.tryConvertToWriteLock(stamp);
-                    if (stamp != 0) {
-                        // exclusive access
-                        currentToken = supplier.get();
-                        return currentToken;
-                    }
-                } else {
+            while (shouldUpdateToken.test(currentToken)) {
+                final long writeStamp = lock.tryConvertToWriteLock(stamp);
+                if (writeStamp != 0) {
+                    // exclusive access
+                    stamp = writeStamp;
+                    currentToken = supplier.get();
                     return currentToken;
                 }
 
+                // failed to convert lock, need to unlock read lock
+                lock.unlockRead(stamp);
                 stamp = lock.writeLock();
             }
+            return currentToken;
         } finally {
             lock.unlock(stamp);
         }
