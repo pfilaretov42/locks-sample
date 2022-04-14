@@ -1,12 +1,13 @@
 package pro.filaretov.java.concurrency.locks;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,4 +63,31 @@ class ReadWriteLockTokenHolderTest {
 
         verify(tokenSupplier).get();
     }
+
+    @SneakyThrows
+    @Test
+    void shouldCreateOnlyOneTokenWithCountDown() {
+        int threadsCount = 10;
+        CountDownLatch startSignal = new CountDownLatch(1);
+        CountDownLatch doneSignal = new CountDownLatch(threadsCount);
+        Runnable runnable = () -> {
+            try {
+                startSignal.await();
+                tokenHolder.getToken();
+                doneSignal.countDown();
+            } catch (InterruptedException e) {
+                throw new AssertionError(e);
+            }
+        };
+
+        for (int i = 0; i < threadsCount; i++) {
+            new Thread(runnable).start();
+        }
+
+        startSignal.countDown();
+        doneSignal.await();
+
+        verify(tokenSupplier).get();
+    }
+
 }
